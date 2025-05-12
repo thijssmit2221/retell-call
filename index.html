@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retell Call</title>
+    <script src="https://unpkg.com/@retell-ai/sdk@latest/dist/retell.umd.js"></script>
+    <style>
+      body { margin: 0; padding: 0; background: transparent; }
+      #retell-container { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="retell-container"></div>
+    <script>
+      function checkRetellSDK() {
+        const sdkCheck = {
+          retellAI: !!window.RetellAI,
+          retell: !!window.retell,
+          retellSDK: !!window.RetellWebClient,
+          globalKeys: Object.keys(window)
+        };
+        window.ReactNativeWebView?.postMessage(JSON.stringify({
+          type: 'log',
+          message: 'SDK check: ' + JSON.stringify(sdkCheck)
+        }));
+        return sdkCheck.retellSDK;
+      }
+
+      window.addEventListener('message', function(event) {
+        try {
+          const data = JSON.parse(event.data);
+          window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'log', message: 'Received message: ' + event.data }));
+
+          if (data.accessToken) {
+            window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'log', message: 'Starting call with token' }));
+            window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'log', message: 'Checking SDK availability...' }));
+
+            if (!checkRetellSDK()) {
+              window.ReactNativeWebView?.postMessage(JSON.stringify({
+                type: 'error',
+                message: 'Failed to start call: RetellWebClient not found. Make sure the Retell SDK is properly loaded.'
+              }));
+              return;
+            }
+
+            const client = new window.RetellWebClient({
+              accessToken: data.accessToken,
+              streamOptions: { audio: true },
+              retellContainer: document.getElementById('retell-container'),
+              onCallConnected: () => {
+                window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'connected' }));
+              },
+              onCallDisconnected: () => {
+                window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'disconnected' }));
+              },
+              onError: (error) => {
+                window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'error', message: error.message }));
+              }
+            });
+
+            window.currentCall = client;
+          }
+
+          if (data.action === 'endCall' && window.currentCall) {
+            window.currentCall.hangup();
+          }
+        } catch (e) {
+          window.ReactNativeWebView?.postMessage(JSON.stringify({
+            type: 'error',
+            message: 'JS error: ' + e.message
+          }));
+        }
+      });
+
+      window.ReactNativeWebView?.postMessage(JSON.stringify({
+        type: 'log',
+        message: 'ðŸ“± Retell WebView ready and listening'
+      }));
+    </script>
+  </body>
+</html>
